@@ -11,7 +11,7 @@ services:
 before_install:
 - gem install asciidoctor
 install:
-- /usr/bin/echo "INSTALL"
+- echo "INSTALL"
 before_script:
 - "./.travis/install_yq.sh"
 - "./.travis/setup-kubernetes.sh"
