@@ -7,6 +7,8 @@ package io.strimzi.operator.common.operator.resource;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.KubernetesResourceList;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.Watch;
+import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.kubernetes.client.dsl.EditReplacePatchDeletable;
 import io.fabric8.kubernetes.client.dsl.MixedOperation;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
@@ -20,6 +22,10 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -311,6 +317,241 @@ public abstract class AbstractResourceOperatorTest<C extends KubernetesClient, T
         });
     }
 
+    @Test
+    public void watchFor_predImmediatelySatisfied(TestContext testContext) throws InterruptedException {
+        T resource = resource();
+        Resource mockResource = mock(resourceType());
+        when(mockResource.get()).thenReturn(resource);
+        AtomicBoolean watchClosed = new AtomicBoolean(false);
+        when(mockResource.watch(any())).thenReturn(new Watch() {
+            @Override
+            public void close() {
+                watchClosed.set(true);
+            }
+        });
+
+        NonNamespaceOperation mockNameable = mock(NonNamespaceOperation.class);
+        when(mockNameable.withName(matches(RESOURCE_NAME))).thenReturn(mockResource);
+
+        MixedOperation mockCms = mock(MixedOperation.class);
+        when(mockCms.inNamespace(matches(NAMESPACE))).thenReturn(mockNameable);
+
+        C mockClient = mock(clientType());
+        mocker(mockClient, mockCms);
+
+        AbstractResourceOperator<C, T, L, D, R> op = createResourceOperations(vertx, mockClient);
+        AtomicInteger predCallCount = new AtomicInteger();
+        Async async = testContext.async();
+        op.watchFor(this.toString(), resource.getMetadata().getNamespace(), resource.getMetadata().getName(), 1_000,
+            r -> {
+                predCallCount.incrementAndGet();
+                return true;
+            }).setHandler(ar -> {
+                testContext.assertTrue(ar.succeeded());
+                testContext.assertEquals(1, predCallCount.get());
+                async.complete();
+            });
+        async.await();
+        Thread.sleep(1_000);
+        testContext.assertTrue(watchClosed.get());
+    }
+
+    @Test
+    public void watchFor_predImmediatelyThrows(TestContext testContext) throws InterruptedException {
+        T resource = resource();
+        Resource mockResource = mock(resourceType());
+        when(mockResource.get()).thenReturn(resource);
+        AtomicBoolean watchClosed = new AtomicBoolean(false);
+        when(mockResource.watch(any())).thenReturn(new Watch() {
+            @Override
+            public void close() {
+                watchClosed.set(true);
+            }
+        });
+
+        NonNamespaceOperation mockNameable = mock(NonNamespaceOperation.class);
+        when(mockNameable.withName(matches(RESOURCE_NAME))).thenReturn(mockResource);
+
+        MixedOperation mockCms = mock(MixedOperation.class);
+        when(mockCms.inNamespace(matches(NAMESPACE))).thenReturn(mockNameable);
+
+        C mockClient = mock(clientType());
+        mocker(mockClient, mockCms);
+        Async async = testContext.async();
+        AtomicInteger predCallCount = new AtomicInteger(0);
+        RuntimeException runtimeException = new RuntimeException();
+        AbstractResourceOperator<C, T, L, D, R> op = createResourceOperations(vertx, mockClient);
+        op.watchFor(this.toString(), resource.getMetadata().getNamespace(), resource.getMetadata().getName(), 1_000,
+            r -> {
+                if (predCallCount.getAndIncrement() == 0) {
+                    throw runtimeException;
+                }
+                return true;
+            }).setHandler(ar -> {
+                //testContext.assertTrue(ar.succeeded());
+                //testContext.assertEquals(2, predCallCount.get());
+                async.complete();
+            });
+
+        async.await();
+        while (!watchClosed.get()) {
+
+        }
+    }
+
+    @Test
+    public void watchFor_predEventuallySatisfied(TestContext testContext) throws InterruptedException {
+        T resource = resource();
+        Resource mockResource = mock(resourceType());
+        when(mockResource.get()).thenReturn(resource);
+        AtomicBoolean watchClosed = new AtomicBoolean(false);
+        AtomicReference<Watcher<T>> watcherRef = new AtomicReference<>();
+        when(mockResource.watch(any())).thenAnswer(invocation -> {
+            Watcher<T> watcher = invocation.getArgument(0);
+            watcherRef.set(watcher);
+            return new Watch() {
+                @Override
+                public void close() {
+                    watchClosed.set(true);
+                }
+            };
+        });
+
+        NonNamespaceOperation mockNameable = mock(NonNamespaceOperation.class);
+        when(mockNameable.withName(matches(RESOURCE_NAME))).thenReturn(mockResource);
+
+        MixedOperation mockCms = mock(MixedOperation.class);
+        when(mockCms.inNamespace(matches(NAMESPACE))).thenReturn(mockNameable);
+
+        C mockClient = mock(clientType());
+        mocker(mockClient, mockCms);
+
+        AbstractResourceOperator<C, T, L, D, R> op = createResourceOperations(vertx, mockClient);
+        AtomicInteger predCallCount = new AtomicInteger(0);
+        Async async = testContext.async();
+        op.watchFor(this.toString(), resource.getMetadata().getNamespace(), resource.getMetadata().getName(), 10_000,
+            r -> {
+                return predCallCount.incrementAndGet() >= 2;
+            }).setHandler(ar -> {
+                if (!ar.succeeded()) ar.cause().printStackTrace();
+                testContext.assertTrue(ar.succeeded());
+                testContext.assertEquals(2, predCallCount.get());
+                async.complete();
+            });
+        while (watcherRef.get() == null) {
+            // spin
+        }
+        Thread.sleep(1_000);
+        watcherRef.get().eventReceived(Watcher.Action.MODIFIED, null);
+        async.await();
+        while (!watchClosed.get()) {
+
+        }
+    }
+
+    @Test
+    public void watchFor_predEventuallyThrows(TestContext testContext) throws InterruptedException {
+        T resource = resource();
+        Resource mockResource = mock(resourceType());
+        when(mockResource.get()).thenReturn(resource);
+        AtomicBoolean watchClosed = new AtomicBoolean(false);
+        AtomicReference<Watcher<T>> watcherRef = new AtomicReference<>();
+        when(mockResource.watch(any())).thenAnswer(invocation -> {
+            Watcher<T> watcher = invocation.getArgument(0);
+            watcherRef.set(watcher);
+            return new Watch() {
+                @Override
+                public void close() {
+                    watchClosed.set(true);
+                }
+            };
+        });
+
+        NonNamespaceOperation mockNameable = mock(NonNamespaceOperation.class);
+        when(mockNameable.withName(matches(RESOURCE_NAME))).thenReturn(mockResource);
+
+        MixedOperation mockCms = mock(MixedOperation.class);
+        when(mockCms.inNamespace(matches(NAMESPACE))).thenReturn(mockNameable);
+
+        C mockClient = mock(clientType());
+        mocker(mockClient, mockCms);
+
+        AbstractResourceOperator<C, T, L, D, R> op = createResourceOperations(vertx, mockClient);
+        AtomicInteger predCallCount = new AtomicInteger();
+        Async async = testContext.async();
+        RuntimeException runtimeException = new RuntimeException();
+        op.watchFor(this.toString(), resource.getMetadata().getNamespace(), resource.getMetadata().getName(), 1_000,
+            r -> {
+                int i = predCallCount.getAndIncrement();
+                if (i == 0) {
+                    return false;
+                } else if (i == 1) {
+                    throw runtimeException;
+                } else {
+                    return true;
+                }
+            }).setHandler(ar -> {
+                testContext.assertTrue(ar.failed());
+                testContext.assertEquals(runtimeException, ar.cause());
+                testContext.assertEquals(2, predCallCount.get());
+                async.complete();
+            });
+        while (watcherRef.get() == null) {
+            // spin
+        }
+        Thread.sleep(500);
+        watcherRef.get().eventReceived(Watcher.Action.MODIFIED, null);
+        watcherRef.get().eventReceived(Watcher.Action.MODIFIED, null);
+        async.await();
+        while (!watchClosed.get()) {
+
+        }
+    }
+
+    @Test
+    public void watchFor_timeout(TestContext testContext) throws InterruptedException {
+        T resource = resource();
+        Resource mockResource = mock(resourceType());
+        when(mockResource.get()).thenReturn(resource);
+        AtomicBoolean watchClosed = new AtomicBoolean(false);
+        AtomicReference<Watcher<T>> watcherRef = new AtomicReference<>();
+        when(mockResource.watch(any())).thenAnswer(invocation -> {
+            Watcher<T> watcher = invocation.getArgument(0);
+            watcherRef.set(watcher);
+            return new Watch() {
+                @Override
+                public void close() {
+                    watchClosed.set(true);
+                }
+            };
+        });
+
+        NonNamespaceOperation mockNameable = mock(NonNamespaceOperation.class);
+        when(mockNameable.withName(matches(RESOURCE_NAME))).thenReturn(mockResource);
+
+        MixedOperation mockCms = mock(MixedOperation.class);
+        when(mockCms.inNamespace(matches(NAMESPACE))).thenReturn(mockNameable);
+
+        C mockClient = mock(clientType());
+        mocker(mockClient, mockCms);
+
+        AbstractResourceOperator<C, T, L, D, R> op = createResourceOperations(vertx, mockClient);
+        AtomicInteger predCallCount = new AtomicInteger();
+        Async async = testContext.async();
+        op.watchFor(this.toString(), resource.getMetadata().getNamespace(), resource.getMetadata().getName(), 1_000,
+            r -> {
+                return false;
+            }).setHandler(ar -> {
+                testContext.assertTrue(ar.failed());
+                testContext.assertTrue(ar.cause() instanceof TimeoutException);
+                async.complete();
+            });
+        async.await();
+        while (!watchClosed.get()) {
+
+        }
+        Thread.sleep(1_000_000_000);
+    }
 
 }
 

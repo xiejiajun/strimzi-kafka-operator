@@ -7,6 +7,7 @@ package io.strimzi.operator.common.operator.resource;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.KubernetesResourceList;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.Watch;
 import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.kubernetes.client.dsl.FilterWatchListMultiDeletable;
@@ -23,7 +24,9 @@ import org.apache.logging.log4j.Logger;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiPredicate;
+import java.util.function.Predicate;
 
 /**
  * Abstract resource creation, for a generic resource type {@code R}.
@@ -303,5 +306,129 @@ public abstract class AbstractResourceOperator<C extends KubernetesClient, T ext
             pollIntervalMs,
             timeoutMs,
             () -> predicate.test(namespace, name));
+    }
+
+    private Future<Void> closeAsync(java.io.Closeable c) {
+        Future<Void> result = Future.future();
+        vertx.createSharedWorkerExecutor("kubernetes-ops-tool").executeBlocking(
+            fut -> {
+                try {
+                    c.close();
+                    log.debug("Closed {}", c);
+                    fut.complete();
+                } catch (Throwable t) {
+                    log.warn("Ignoring error closing {}", c);
+                    fut.fail(t);
+                }
+            },
+            true,
+            result);
+        return result;
+    }
+
+    /**
+     * Returns a Future which is completed when the given {@code predicate} returns true for the resource given by
+     * {@code namespace} and {@code name}.
+     * The predicate will be called once initially and whenever the given resource changes.
+     * Unlike {@link #waitFor(String, String, long, long, BiPredicate)} this makes use of watches rather than
+     * polling.
+     *
+     * @param logContext A string to use in log messages
+     * @param namespace The namespace of the resource to watch
+     * @param name The name of the resource to watch
+     * @param timeoutMs The timeout. in milliseconds. The returned Future will after after approximately this
+     *                  time if it hasn't yet been satisfied.
+     * @param predicate The predicate to be satisfied.
+     * @return A future which will be completed when the predicate returns true,
+     * or after approximately {@code timeoutMs} milliseconds.
+     */
+    public Future<Void> watchFor(String logContext, String namespace, String name, long timeoutMs, Predicate<T> predicate) {
+        AtomicReference<Watch> watchReference = new AtomicReference<>();
+        Future<Void> conditionResult = Future.future();
+        long timerId = vertx.setTimer(timeoutMs, tid -> {
+            log.warn("{}: Timeout after {}ms", logContext, timeoutMs);
+            conditionResult.tryFail(new TimeoutException("Timeout '" + logContext + "' after " + timeoutMs + "ms"));
+        });
+        log.debug("{}: Opening watch on {} {}/{}", logContext, this.resourceKind, namespace, name);
+        // Set up the watchReference
+        Future<Watch> watchFuture = getWatchFuture(namespace, name, new Watcher<T>() {
+            @Override
+            public void eventReceived(Action action, T resource) {
+                try {
+                    log.debug("{}: Received {} event", logContext, action);
+                    if (predicate.test(resource)) {
+                        log.debug("{}: Predicate satisfied by {} event", logContext, action);
+                        conditionResult.tryComplete();
+                    } else {
+                        log.trace("{}: Predicate not satisfied by {} event", logContext, action);
+                    }
+                } catch (Throwable t) {
+                    log.warn("{}: Predicate threw {} for event {}", logContext, t.toString(), action);
+                    conditionResult.tryFail(t);
+                }
+            }
+
+            @Override
+            public void onClose(KubernetesClientException cause) {
+            }
+        });
+        watchFuture.setHandler(ar -> {
+            if (ar.succeeded()) {
+                // Watch is set up, but the predicate could have been satisfied before the watchReference was set up
+                // and there might not be further events before the timeout, so get the resource and apply the predicate.
+                Watch watch = ar.result();
+                log.debug("{}: Opened watch {}", logContext, watch);
+                watchReference.set(watch);
+                getAsync(namespace, name).map(resource -> {
+                    try {
+                        if (predicate.test(resource)) {
+                            log.debug("{}: Condition satisfied by post-watch get", logContext);
+                            conditionResult.tryComplete();
+                        } else {
+                            log.trace("{}: Predicate not satisfied by post-watch get", logContext);
+                        }
+                    } catch (Throwable t) {
+                        log.warn("{}: Predicate threw {} for post-watch get", logContext, t.toString());
+                        conditionResult.tryFail(t);
+                    }
+                    return resource;
+                });
+            } else {
+                conditionResult.fail(ar.cause());
+            }
+        });
+
+        Future<Void> result = Future.future();
+        conditionResult.setHandler(ar -> {
+            vertx.cancelTimer(timerId);
+            Watch watch = watchReference.get();
+            if (watchReference != null) {
+                // NOTE: The close happens asynchronously
+                log.debug("{}: Closing {}", logContext, watch);
+                closeAsync(watch);
+            }
+            if (ar.succeeded()) {
+                result.complete();
+            } else {
+                result.fail(ar.cause());
+            }
+        });
+        return result;
+    }
+
+    Future<Watch> getWatchFuture(String namespace, String name, Watcher<T> watcher) {
+        Future<Watch> watchFuture = Future.future();
+        vertx.createSharedWorkerExecutor("kubernetes-ops-tool").<Watch>executeBlocking(
+            fut -> {
+                try {
+                    Watch watch = operation().inNamespace(namespace).withName(name).watch(watcher);
+                    fut.complete(watch);
+                } catch (Throwable t) {
+                    fut.fail(t);
+                }
+            },
+            true,
+            watchFuture);
+        return watchFuture;
     }
 }
