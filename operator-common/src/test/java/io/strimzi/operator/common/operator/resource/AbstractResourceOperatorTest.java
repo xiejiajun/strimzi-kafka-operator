@@ -394,9 +394,7 @@ public abstract class AbstractResourceOperatorTest<C extends KubernetesClient, T
             });
 
         async.await();
-        while (!watchClosed.get()) {
-
-        }
+        assertWatchClosed(testContext, watchClosed);
     }
 
     @Test
@@ -441,12 +439,11 @@ public abstract class AbstractResourceOperatorTest<C extends KubernetesClient, T
         while (watcherRef.get() == null) {
             // spin
         }
-        Thread.sleep(1_000);
+        // We have to sleep otherwise the event is delivered too quickly and is handled by the "initial get" case.
+        Thread.sleep(500);
         watcherRef.get().eventReceived(Watcher.Action.MODIFIED, null);
         async.await();
-        while (!watchClosed.get()) {
-
-        }
+        assertWatchClosed(testContext, watchClosed);
     }
 
     @Test
@@ -499,13 +496,12 @@ public abstract class AbstractResourceOperatorTest<C extends KubernetesClient, T
         while (watcherRef.get() == null) {
             // spin
         }
+        // We have to sleep otherwise the event is delivered too quickly and is handled by the "initial get" case.
         Thread.sleep(500);
         watcherRef.get().eventReceived(Watcher.Action.MODIFIED, null);
         watcherRef.get().eventReceived(Watcher.Action.MODIFIED, null);
         async.await();
-        while (!watchClosed.get()) {
-
-        }
+        assertWatchClosed(testContext, watchClosed);
     }
 
     @Test
@@ -547,10 +543,17 @@ public abstract class AbstractResourceOperatorTest<C extends KubernetesClient, T
                 async.complete();
             });
         async.await();
-        while (!watchClosed.get()) {
+        assertWatchClosed(testContext, watchClosed);
+    }
 
+    void assertWatchClosed(TestContext testContext, AtomicBoolean watchClosed) throws InterruptedException {
+        int i = 100;
+        while (!watchClosed.get()) {
+            if (i-- == 0) {
+                testContext.fail("watch not closed");
+            }
+            Thread.sleep(100);
         }
-        Thread.sleep(1_000_000_000);
     }
 
 }

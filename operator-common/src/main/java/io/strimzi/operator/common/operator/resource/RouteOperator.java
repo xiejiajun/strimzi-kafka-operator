@@ -41,7 +41,7 @@ public class RouteOperator extends AbstractResourceOperator<OpenShiftClient, Rou
      * @return
      */
     public Future<Void> hasAddress(String namespace, String name, long pollIntervalMs, long timeoutMs) {
-        return waitFor(namespace, name, pollIntervalMs, timeoutMs, this::isAddressReady);
+        return watchFor("Route has address", namespace, name, timeoutMs, this::isAddressReady);
     }
 
     /**
@@ -54,6 +54,10 @@ public class RouteOperator extends AbstractResourceOperator<OpenShiftClient, Rou
         Resource<Route, DoneableRoute> resourceOp = operation().inNamespace(namespace).withName(name);
         Route resource = resourceOp.get();
 
+        return isAddressReady(resource);
+    }
+
+    boolean isAddressReady(Route resource) {
         if (resource != null && resource.getStatus() != null && resource.getStatus().getIngress() != null && resource.getStatus().getIngress().size() > 0) {
             if (resource.getStatus().getIngress().get(0).getHost() != null) {
                 return true;

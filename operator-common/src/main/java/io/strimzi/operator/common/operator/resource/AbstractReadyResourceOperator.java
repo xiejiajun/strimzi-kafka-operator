@@ -41,7 +41,10 @@ public abstract class AbstractReadyResourceOperator<C extends KubernetesClient,
     }
 
     public Future<Void> readiness(String namespace, String name, long pollIntervalMs, long timeoutMs) {
-        return waitFor(namespace, name, pollIntervalMs, timeoutMs, this::isReady);
+        return watchFor(this.resourceKind + " is ready", namespace, name, timeoutMs, resource -> {
+            return !Readiness.isReadinessApplicable(resource.getClass())
+                    || Readiness.isReady(resource);
+        });
     }
 
     /**
