@@ -22,8 +22,8 @@ public class IngressOperator extends AbstractResourceOperator<KubernetesClient, 
      * @param vertx The Vertx instance
      * @param client The Kubernetes client
      */
-    public IngressOperator(Vertx vertx, KubernetesClient client) {
-        super(vertx, client, "Ingress");
+    public IngressOperator(Vertx vertx, KubernetesClient client, long operationTimeoutMs) {
+        super(vertx, client, "Ingress", operationTimeoutMs);
     }
 
     @Override

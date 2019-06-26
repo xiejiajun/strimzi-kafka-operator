@@ -21,8 +21,8 @@ public class EndpointOperator extends AbstractReadyResourceOperator<KubernetesCl
      * @param vertx The Vertx instance
      * @param client The Kubernetes client
      */
-    EndpointOperator(Vertx vertx, KubernetesClient client) {
-        super(vertx, client, "Endpoints");
+    EndpointOperator(Vertx vertx, KubernetesClient client, long operationTimeoutMs) {
+        super(vertx, client, "Endpoints", operationTimeoutMs);
     }
 
     @Override

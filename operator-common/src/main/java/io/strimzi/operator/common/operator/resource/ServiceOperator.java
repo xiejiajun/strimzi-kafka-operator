@@ -25,8 +25,8 @@ public class ServiceOperator extends AbstractResourceOperator<KubernetesClient, 
      * @param vertx The Vertx instance
      * @param client The Kubernetes client
      */
-    public ServiceOperator(Vertx vertx, KubernetesClient client) {
-        super(vertx, client, "Service");
+    public ServiceOperator(Vertx vertx, KubernetesClient client, long operationTimeoutMs) {
+        super(vertx, client, "Service", operationTimeoutMs);
         this.endpointOperations = new EndpointOperator(vertx, client);
     }
 

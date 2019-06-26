@@ -32,8 +32,8 @@ public abstract class AbstractWatchableResourceOperator<
      * @param client       The kubernetes client.
      * @param resourceKind The mind of Kubernetes resource (used for logging).
      */
-    public AbstractWatchableResourceOperator(Vertx vertx, C client, String resourceKind) {
-        super(vertx, client, resourceKind);
+    public AbstractWatchableResourceOperator(Vertx vertx, C client, String resourceKind, long operationTimeoutMs) {
+        super(vertx, client, resourceKind, operationTimeoutMs);
     }
 
     protected Watch watchInAnyNamespace(Watcher<T> watcher) {
