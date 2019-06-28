@@ -43,6 +43,7 @@ RUN curl -O https://archive.apache.org/dist/kafka/${KAFKA_VERSION}/kafka_${SCALA
     && rm -f kafka_${SCALA_VERSION}-${KAFKA_VERSION}.tgz*
 
 COPY ./tmp/kafka-agent-${strimzi_version}.jar ${KAFKA_HOME}/libs/
+COPY ./target/dependency/*.jar ${KAFKA_HOME}/libs/
 
 RUN yum -y install stunnel net-tools && yum clean all -y
 
