@@ -106,7 +106,7 @@ public abstract class AbstractNonNamespacedResourceOperator<C extends Kubernetes
                     if (current != null) {
                         // Deletion is desired
                         log.debug("{} {} exist, deleting it", resourceKind, name);
-                        internalDelete(name).setHandler(future);
+                        observedDelete(name).setHandler(future);
                     } else {
                         log.debug("{} {} does not exist, noop", resourceKind, name);
                         future.complete(ReconcileResult.noop(null));
@@ -121,12 +121,14 @@ public abstract class AbstractNonNamespacedResourceOperator<C extends Kubernetes
     }
 
     /**
-     * Asynchronously deletes the resource with the given {@code name}.
+     * Asynchronously deletes the resource with the given {@code name},
+     * returning a Future which completes once the resource
+     * is observed to have been deleted.
      * @param name The resource to be deleted.
      * @return A future which will be completed on the context thread
      * once the resource has been deleted.
      */
-    private Future<ReconcileResult<T>> internalDelete(String name) {
+    private Future<ReconcileResult<T>> observedDelete(String name) {
         R resourceOp = operation().withName(name);
         Future<ReconcileResult<T>> watchForDeleteFuture = resourceSupport.selfClosingWatch(resourceOp,
             "observe deletion of " + resourceKind + " " + name,
