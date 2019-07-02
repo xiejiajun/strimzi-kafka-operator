@@ -10,11 +10,13 @@ import io.fabric8.kubernetes.api.model.KubernetesResourceList;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.Watch;
 import io.fabric8.kubernetes.client.Watcher;
+import io.fabric8.kubernetes.client.dsl.EditReplacePatchDeletable;
 import io.fabric8.kubernetes.client.dsl.FilterWatchListDeletable;
 import io.fabric8.kubernetes.client.dsl.FilterWatchListMultiDeletable;
 import io.fabric8.kubernetes.client.dsl.MixedOperation;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
 import io.fabric8.kubernetes.client.dsl.Resource;
+import io.fabric8.kubernetes.client.dsl.base.BaseOperation;
 import io.strimzi.operator.common.Util;
 import io.strimzi.operator.common.model.Labels;
 import io.vertx.core.CompositeFuture;
@@ -55,7 +57,6 @@ public abstract class AbstractResourceOperator<C extends KubernetesClient,
      * @param vertx The vertx instance.
      * @param client The kubernetes client.
      * @param resourceKind The mind of Kubernetes resource (used for logging).
-     * @param operationTimeoutMs Timeout
      */
     public AbstractResourceOperator(Vertx vertx, C client, String resourceKind, long operationTimeoutMs) {
         this.vertx = vertx;
@@ -151,15 +152,14 @@ public abstract class AbstractResourceOperator<C extends KubernetesClient,
     protected Future<ReconcileResult<T>> internalDelete(String namespace, String name, boolean cascading) {
         R resourceOp = operation().inNamespace(namespace).withName(name);
         Future<ReconcileResult<T>> watchForDeleteFuture = resourceSupport.selfClosingWatch(resourceOp,
-            "observe deletion of " + resourceKind + " " + namespace + "/" + name,
-            (action, resource) -> {
-                if (action == Watcher.Action.DELETED) {
-                    log.debug("{} {}/{} has been deleted", resourceKind, namespace, name);
-                    return ReconcileResult.deleted();
-                } else {
-                    return null;
-                }
-            });
+                (action, resource) -> {
+                    if (action == Watcher.Action.DELETED) {
+                        log.debug("{} {}/{} has been deleted", resourceKind, namespace, name);
+                        return ReconcileResult.deleted();
+                    } else {
+                        return null;
+                    }
+                });
         Future<Void> deleteFuture = resourceSupport.deleteAsync(resourceOp.cascading(cascading));
         return CompositeFuture.join(watchForDeleteFuture, deleteFuture).map(ReconcileResult.deleted());
     }

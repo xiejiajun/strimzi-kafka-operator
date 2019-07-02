@@ -27,7 +27,6 @@ public class DeploymentOperator extends AbstractScalableResourceOperator<Kuberne
      * Constructor
      * @param vertx The Vertx instance
      * @param client The Kubernetes client
-     * @param operationTimeoutMs Timeout
      */
     public DeploymentOperator(Vertx vertx, KubernetesClient client, long operationTimeoutMs) {
         this(vertx, client, new PodOperator(vertx, client, operationTimeoutMs), operationTimeoutMs);

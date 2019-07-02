@@ -72,6 +72,6 @@ public class RoleBindingOperatorTest extends AbstractResourceOperatorTest<Kubern
     @Override
     protected AbstractResourceOperator<KubernetesClient, RoleBinding, RoleBindingList, DoneableRoleBinding,
                     Resource<RoleBinding, DoneableRoleBinding>> createResourceOperations(Vertx vertx, KubernetesClient mockClient) {
-        return new RoleBindingOperator(vertx, mockClient, 100);
+        return new RoleBindingOperator(vertx, mockClient);
     }
 }

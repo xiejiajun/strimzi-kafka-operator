@@ -90,12 +90,12 @@
             <artifactId>mockito-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.strimzi</groupId>
-            <artifactId>test</artifactId>
+            <groupId>io.fabric8</groupId>
+            <artifactId>openshift-server-mock</artifactId>
         </dependency>
         <dependency>
             <groupId>io.strimzi</groupId>
-            <artifactId>mockkube</artifactId>
+            <artifactId>test</artifactId>
         </dependency>
     </dependencies>
 

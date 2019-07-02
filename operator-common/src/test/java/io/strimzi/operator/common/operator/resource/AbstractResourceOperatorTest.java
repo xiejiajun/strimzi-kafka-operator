@@ -4,12 +4,9 @@
  */
 package io.strimzi.operator.common.operator.resource;
 
-import io.fabric8.kubernetes.api.model.Doneable;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.KubernetesResourceList;
 import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.Watch;
-import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.kubernetes.client.dsl.EditReplacePatchDeletable;
 import io.fabric8.kubernetes.client.dsl.MixedOperation;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
@@ -24,8 +21,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -38,7 +33,7 @@ import static org.mockito.Mockito.when;
 
 @RunWith(VertxUnitRunner.class)
 public abstract class AbstractResourceOperatorTest<C extends KubernetesClient, T extends HasMetadata,
-        L extends KubernetesResourceList, D extends Doneable<T>, R extends Resource<T, D>> {
+        L extends KubernetesResourceList, D, R extends Resource<T, D>> {
 
     public static final String RESOURCE_NAME = "my-resource";
     public static final String NAMESPACE = "test";
@@ -230,21 +225,12 @@ public abstract class AbstractResourceOperatorTest<C extends KubernetesClient, T
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void deleteWhenResourceExistsStillDeletes(TestContext context) {
         EditReplacePatchDeletable mockERPD = mock(EditReplacePatchDeletable.class);
-        when(mockERPD.delete()).thenReturn(Boolean.TRUE);
+
         T resource = resource();
         Resource mockResource = mock(resourceType());
         when(mockResource.get()).thenReturn(resource);
-        AtomicBoolean watchClosed = new AtomicBoolean(false);
-        when(mockResource.watch(any())).thenAnswer(invocation -> {
-            Watcher watcher = invocation.getArgument(0);
-            watcher.eventReceived(Watcher.Action.DELETED, resource);
-            return (Watch) () -> {
-                watchClosed.set(true);
-            };
-        });
         when(mockResource.cascading(eq(true))).thenReturn(mockERPD);
 
         NonNamespaceOperation mockNameable = mock(NonNamespaceOperation.class);
@@ -260,30 +246,19 @@ public abstract class AbstractResourceOperatorTest<C extends KubernetesClient, T
 
         Async async = context.async();
         op.reconcile(resource.getMetadata().getNamespace(), resource.getMetadata().getName(), null).setHandler(ar -> {
-            context.assertTrue(ar.succeeded());
+            assertTrue(ar.succeeded());
             verify(mockERPD).delete();
-            context.assertTrue(watchClosed.get());
             async.complete();
         });
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void successfulDeletion(TestContext context) {
         EditReplacePatchDeletable mockERPD = mock(EditReplacePatchDeletable.class);
-        when(mockERPD.delete()).thenReturn(Boolean.TRUE);
 
         T resource = resource();
         Resource mockResource = mock(resourceType());
         when(mockResource.get()).thenReturn(resource);
-        AtomicBoolean watchClosed = new AtomicBoolean(false);
-        when(mockResource.watch(any())).thenAnswer(invocation -> {
-            Watcher watcher = invocation.getArgument(0);
-            watcher.eventReceived(Watcher.Action.DELETED, resource);
-            return (Watch) () -> {
-                watchClosed.set(true);
-            };
-        });
         when(mockResource.cascading(eq(true))).thenReturn(mockERPD);
 
         NonNamespaceOperation mockNameable = mock(NonNamespaceOperation.class);
@@ -300,15 +275,13 @@ public abstract class AbstractResourceOperatorTest<C extends KubernetesClient, T
         Async async = context.async();
         op.reconcile(resource.getMetadata().getNamespace(), resource.getMetadata().getName(), null).setHandler(ar -> {
             if (ar.failed()) ar.cause().printStackTrace();
-            context.assertTrue(ar.succeeded());
+            assertTrue(ar.succeeded());
             verify(mockERPD).delete();
-            context.assertTrue(watchClosed.get());
             async.complete();
         });
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void deletionThrows(TestContext context) {
         RuntimeException ex = new RuntimeException("Testing this exception is handled correctly");
         EditReplacePatchDeletable mockERPD = mock(EditReplacePatchDeletable.class);
@@ -317,14 +290,6 @@ public abstract class AbstractResourceOperatorTest<C extends KubernetesClient, T
         T resource = resource();
         Resource mockResource = mock(resourceType());
         when(mockResource.get()).thenReturn(resource);
-        AtomicBoolean watchClosed = new AtomicBoolean(false);
-        when(mockResource.watch(any())).thenAnswer(invocation -> {
-            Watcher watcher = invocation.getArgument(0);
-            watcher.eventReceived(Watcher.Action.DELETED, resource);
-            return (Watch) () -> {
-                watchClosed.set(true);
-            };
-        });
         when(mockResource.cascading(eq(true))).thenReturn(mockERPD);
 
         NonNamespaceOperation mockNameable = mock(NonNamespaceOperation.class);
@@ -340,49 +305,8 @@ public abstract class AbstractResourceOperatorTest<C extends KubernetesClient, T
 
         Async async = context.async();
         op.reconcile(resource.getMetadata().getNamespace(), resource.getMetadata().getName(), null).setHandler(ar -> {
-            context.assertTrue(ar.failed());
-            context.assertEquals(ex, ar.cause());
-            context.assertTrue(watchClosed.get());
-            async.complete();
-        });
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void deletion_deleteReturnsFalse(TestContext context) {
-        RuntimeException ex = new RuntimeException("Testing this exception is handled correctly");
-        EditReplacePatchDeletable mockERPD = mock(EditReplacePatchDeletable.class);
-        when(mockERPD.delete()).thenReturn(Boolean.FALSE);
-
-        T resource = resource();
-        Resource mockResource = mock(resourceType());
-        when(mockResource.get()).thenReturn(resource);
-        AtomicBoolean watchClosed = new AtomicBoolean(false);
-        when(mockResource.watch(any())).thenAnswer(invocation -> {
-            Watcher watcher = invocation.getArgument(0);
-            watcher.eventReceived(Watcher.Action.DELETED, resource);
-            return (Watch) () -> {
-                watchClosed.set(true);
-            };
-        });
-        when(mockResource.cascading(eq(true))).thenReturn(mockERPD);
-
-        NonNamespaceOperation mockNameable = mock(NonNamespaceOperation.class);
-        when(mockNameable.withName(matches(RESOURCE_NAME))).thenReturn(mockResource);
-
-        MixedOperation mockCms = mock(MixedOperation.class);
-        when(mockCms.inNamespace(matches(NAMESPACE))).thenReturn(mockNameable);
-
-        C mockClient = mock(clientType());
-        mocker(mockClient, mockCms);
-
-        AbstractResourceOperator<C, T, L, D, R> op = createResourceOperations(vertx, mockClient);
-
-        Async async = context.async();
-        op.reconcile(resource.getMetadata().getNamespace(), resource.getMetadata().getName(), null).setHandler(ar -> {
-            context.assertTrue(ar.failed());
-            context.assertTrue(ar.cause().getMessage().endsWith("could not be deleted (returned false)"));
-            context.assertTrue(watchClosed.get());
+            assertTrue(ar.failed());
+            assertEquals(ex, ar.cause());
             async.complete();
         });
     }

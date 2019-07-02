@@ -21,7 +21,6 @@ public class RoleBindingOperator extends AbstractResourceOperator<KubernetesClie
      * Constructor
      * @param vertx The Vertx instance
      * @param client The Kubernetes client
-     * @param operationTimeoutMs Timeout
      */
     public RoleBindingOperator(Vertx vertx, KubernetesClient client, long operationTimeoutMs) {
         super(vertx, client, "RoleBinding", operationTimeoutMs);

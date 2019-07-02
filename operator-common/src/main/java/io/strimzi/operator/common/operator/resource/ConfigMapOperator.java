@@ -24,7 +24,6 @@ public class ConfigMapOperator extends AbstractResourceOperator<KubernetesClient
      * Constructor
      * @param vertx The Vertx instance
      * @param client The Kubernetes client
-     * @param operationTimeoutMs Timeout
      */
     public ConfigMapOperator(Vertx vertx, KubernetesClient client, long operationTimeoutMs) {
         super(vertx, client, "ConfigMap", operationTimeoutMs);
