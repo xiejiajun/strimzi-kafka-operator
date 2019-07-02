@@ -141,31 +141,7 @@ public abstract class AbstractNonNamespacedResourceOperator<C extends Kubernetes
                 }
             });
         Future<Void> deleteFuture = resourceSupport.deleteAsync(resourceOp);
-        return CompositeFuture.join(watchForDeleteFuture, deleteFuture)
-                .map(ReconcileResult.<T>deleted())
-                .recover(error -> {
-                    // Belt-and-braces: If we're about to time out, double-check whether the resource
-                    // exists before propagating the TimeoutException
-                    if (error instanceof TimeoutException) {
-                        Future<ReconcileResult<T>> f = Future.future();
-                        resourceSupport.getAsync(resourceOp)
-                            .setHandler(ar -> {
-                                if (ar.succeeded()) {
-                                    if (ar.result() == null) {
-                                        f.complete(ReconcileResult.deleted());
-                                    } else {
-                                        f.fail(error);
-                                    }
-                                } else {
-                                    error.addSuppressed(ar.cause());
-                                    f.fail(error);
-                                }
-                            });
-                        return f;
-                    } else {
-                        return Future.failedFuture(error);
-                    }
-                });
+        return CompositeFuture.join(watchForDeleteFuture, deleteFuture).map(ReconcileResult.deleted());
     }
 
     /**
