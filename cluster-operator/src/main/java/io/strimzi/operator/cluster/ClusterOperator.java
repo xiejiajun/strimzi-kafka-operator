@@ -101,7 +101,9 @@ public class ClusterOperator extends AbstractVerticle {
                 kafkaAssemblyOperator, kafkaMirrorMakerAssemblyOperator,
                 kafkaConnectAssemblyOperator, kafkaBridgeAssemblyOperator, kafkaMirrorMaker2AssemblyOperator));
         for (AbstractOperator<?, ?, ?, ?> operator : operators) {
-            // TODO 创建K8s资源Watcher
+            // TODO 创建K8s资源Watcher: operator.recreateWatch作为operator.createWatch的onClose参数传入，
+            //  实现RetryWatch机制, 注意：这里的operator.recreateWatch是以新建Consumer对象的方式传递过去的，不是递归调用，
+            //  不会造成栈溢出（也可以直接通过Java方法引用、Java lambda等方式来避免递归)
             watchFutures.add(operator.createWatch(namespace, operator.recreateWatch(namespace)).compose(w -> {
                 LOGGER.info("Opened watch for {} operator", operator.kind());
                 watchByKind.put(operator.kind(), w);

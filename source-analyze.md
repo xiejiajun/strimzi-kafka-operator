@@ -31,3 +31,7 @@
 - io.strimzi.operator.cluster.operator.assembly.KafkaAssemblyOperator.reconcile
 - 该Operator主要逻辑流程：
     - io.strimzi.operator.cluster.ClusterOperator#start -> io.strimzi.operator.common.AbstractOperator#createWatch -> vertx.setPeriodic(reconciliationIntervalMs, res2 -> reconcileAll("timer")): 周期性调用reconcileAll进行资源调和 -> io.strimzi.operator.cluster.ClusterOperator#reconcileAll -> io.strimzi.operator.common.Operator#reconcileAll -> io.strimzi.operator.common.Operator#reconcileThese -> io.strimzi.operator.common.AbstractOperator#reconcile -> io.strimzi.operator.cluster.operator.assembly.KafkaAssemblyOperator#createOrUpdate -> io.strimzi.operator.cluster.operator.assembly.KafkaAssemblyOperator#reconcile -> 基于vertx-core的Future.compose链式调用实现一系列调和逻辑
+    
+---
+### RetryWatch机制实现原理
+- io.strimzi.operator.cluster.ClusterOperator#start -> operator.createWatch(namespace, operator.recreateWatch(namespace)) -> AbstractOperator.createWatch(namespace, AbstractOperator.recreateWatch(namespace)): operator.recreateWatch作为operator.createWatch的onClose参数传入，Watch客户端在退出时会调用operator.recreateWatch， 这就实现了RetryWatch机制

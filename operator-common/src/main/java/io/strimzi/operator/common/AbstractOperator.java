@@ -443,15 +443,22 @@ public abstract class AbstractOperator<
      * @return A future which completes when the watcher has been created.
      */
     public Future<Watch> createWatch(String namespace, Consumer<WatcherException> onClose) {
+        // TODO onClose在Watch客户端断开后调用, OperatorWatcher用于处理事件
         return async(vertx, () -> resourceOperator.watch(namespace, selector(), new OperatorWatcher<>(this, namespace, onClose)));
     }
 
+    /**
+     * TODO 作为AbstractOperator#createWatch的onClose参数，从而实现RetryWatch机制
+     * @param namespace
+     * @return
+     */
     public Consumer<WatcherException> recreateWatch(String namespace) {
         Consumer<WatcherException> kubernetesClientExceptionConsumer = new Consumer<WatcherException>() {
             @Override
             public void accept(WatcherException e) {
                 if (e != null) {
                     LOGGER.errorOp("Watcher closed with exception in namespace {}", namespace, e);
+                    // TODO 异常导致的Watch退出，则重建Watch客户端，并把当前Consumer作为onClose参数传入，用于下次恢复
                     createWatch(namespace, this);
                 } else {
                     LOGGER.infoOp("Watcher closed in namespace {}", namespace);
