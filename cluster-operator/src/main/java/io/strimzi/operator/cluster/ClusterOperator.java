@@ -104,6 +104,7 @@ public class ClusterOperator extends AbstractVerticle {
             // TODO 创建K8s资源Watcher: operator.recreateWatch作为operator.createWatch的onClose参数传入，
             //  实现RetryWatch机制, 注意：这里的operator.recreateWatch是以新建Consumer对象的方式传递过去的，不是递归调用，
             //  不会造成栈溢出（也可以直接通过Java方法引用、Java lambda等方式来避免递归)
+            //  1. 这里创建出来的Watch线程会基于K8s事件监听机制触发Kafka CRD资源状态调和逻辑
             watchFutures.add(operator.createWatch(namespace, operator.recreateWatch(namespace)).compose(w -> {
                 LOGGER.info("Opened watch for {} operator", operator.kind());
                 watchByKind.put(operator.kind(), w);
@@ -122,6 +123,8 @@ public class ClusterOperator extends AbstractVerticle {
                     this.reconcileTimer = vertx.setPeriodic(this.config.getReconciliationIntervalMs(), res2 -> {
                         LOGGER.info("Triggering periodic reconciliation for namespace {}", namespace);
                         // TODO 资源状态调和
+                        // TODO 2. 这里是除了上面的Watch机制触发之外的定时调度器定时触发CRD资源状态调和逻辑的触发点
+                        //  (基于golang client-go SDK的operator-framework / kubebuilder框架开发的Operator是没有这条触发路线的)
                         reconcileAll("timer");
                     });
                     return startHealthServer().map((Void) null);
