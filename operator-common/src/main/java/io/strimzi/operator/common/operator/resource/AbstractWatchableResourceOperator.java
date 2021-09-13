@@ -53,11 +53,13 @@ public abstract class AbstractWatchableResourceOperator<
     }
 
     public Watch watch(String namespace, Optional<LabelSelector> selector, Watcher<T> watcher) {
+        // TODO 构建Kafka资源客户端
         FilterWatchListDeletable<T, L> operation
                 = ANY_NAMESPACE.equals(namespace) ? operation().inAnyNamespace() : operation().inNamespace(namespace);
         if (selector.isPresent()) {
             operation = operation.withLabelSelector(selector.get());
         }
+        // TODO 使用fabric8 sdk watch Kafka资源
         return operation.watch(watcher);
     }
 }

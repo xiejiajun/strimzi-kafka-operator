@@ -57,9 +57,12 @@ public interface Operator {
      * @param handler Handler called on completion.
      */
     default void reconcileAll(String trigger, String namespace, Handler<AsyncResult<Void>> handler) {
+       // TODO 获取namespace下的所有Kafka资源
         allResourceNames(namespace).onComplete(ar -> {
+            // TODO 更新监控指标
             pausedResourceCounter(namespace).set(0);
             if (ar.succeeded()) {
+                // TODO 调和资源
                 reconcileThese(trigger, ar.result(), namespace, handler);
                 periodicReconciliationsCounter(namespace).increment();
             } else {
@@ -76,6 +79,7 @@ public interface Operator {
             for (NamespaceAndName resourceRef : desiredNames) {
                 resourceCounter(resourceRef.getNamespace()).getAndIncrement();
                 Reconciliation reconciliation = new Reconciliation(trigger, kind(), resourceRef.getNamespace(), resourceRef.getName());
+                // TODO 真正的资源配置变动处理入口
                 futures.add(reconcile(reconciliation));
             }
             CompositeFuture.join(futures).map((Void) null).onComplete(handler);

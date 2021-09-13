@@ -274,6 +274,7 @@ public class KafkaRoller {
         singleExecutor.schedule(() -> {
             LOGGER.debugCr(reconciliation, "Considering restart of pod {} after delay of {} {}", podId, delay, unit);
             try {
+                // TODO 重启Pod
                 restartIfNecessary(podId, ctx);
                 ctx.promise.complete();
             } catch (InterruptedException e) {
@@ -687,6 +688,7 @@ public class KafkaRoller {
      * @return a Future which completes when the Pod has been recreated
      */
     protected Future<Void> restart(Pod pod) {
+        // TODO 重启Pod
         return podOperations.restart(reconciliation, pod, operationTimeoutMs);
     }
 

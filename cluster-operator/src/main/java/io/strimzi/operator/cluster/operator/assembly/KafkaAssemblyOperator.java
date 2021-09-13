@@ -221,6 +221,7 @@ public class KafkaAssemblyOperator extends AbstractAssemblyOperator<KubernetesCl
         Promise<KafkaStatus> createOrUpdatePromise = Promise.promise();
         ReconciliationState reconcileState = createReconciliationState(reconciliation, kafkaAssembly);
 
+        // TODO 调和资源：重要入口
         reconcile(reconcileState).onComplete(reconcileResult -> {
             KafkaStatus status = reconcileState.kafkaStatus;
             Condition condition;
@@ -258,6 +259,8 @@ public class KafkaAssemblyOperator extends AbstractAssemblyOperator<KubernetesCl
     Future<Void> reconcile(ReconciliationState reconcileState)  {
         Promise<Void> chainPromise = Promise.promise();
 
+        // TODO compose(Function<T, Future<U>> mapper): mapper会将当前future中的调用结果T转换为调用链中的下一个future.
+        //  所以下面这是一个异步调用链
         reconcileState.initialStatus()
                 .compose(state -> state.reconcileCas(this::dateSupplier))
                 .compose(state -> state.clusterOperatorSecret(this::dateSupplier))
@@ -290,10 +293,12 @@ public class KafkaAssemblyOperator extends AbstractAssemblyOperator<KubernetesCl
                 .compose(state -> state.zkHeadlessServiceEndpointReadiness())
                 .compose(state -> state.zkPersistentClaimDeletion())
 
+                // TODO 检查Kafka Spec
                 .compose(state -> state.checkKafkaSpec())
                 .compose(state -> state.kafkaModelWarnings())
                 .compose(state -> state.kafkaManualPodCleaning())
                 .compose(state -> state.kafkaNetPolicy())
+                // TODO Kafka手动滚动更新
                 .compose(state -> state.kafkaManualRollingUpdate())
                 .compose(state -> state.kafkaPvcs())
                 .compose(state -> state.kafkaInitServiceAccount())
@@ -816,6 +821,7 @@ public class KafkaAssemblyOperator extends AbstractAssemblyOperator<KubernetesCl
                     if (sts != null) {
                         if (Annotations.booleanAnnotation(sts, Annotations.ANNO_STRIMZI_IO_MANUAL_ROLLING_UPDATE, false)) {
                             // User trigger rolling update of the whole StatefulSet
+                            // TODO 触发STS副本调整
                             return maybeRollKafka(sts, pod -> {
                                 if (pod == null) {
                                     throw new ConcurrentDeletionException("Unexpectedly pod no longer exists during roll of StatefulSet.");
@@ -1480,6 +1486,7 @@ public class KafkaAssemblyOperator extends AbstractAssemblyOperator<KubernetesCl
                         this.kafkaBootstrapDnsName.addAll(ListenersUtils.alternativeNames(kafkaCluster.getListeners()));
 
                         //return Future.succeededFuture(this);
+                        // TODO 返回当前sts对应的pod列表
                         return podOperations.listAsync(namespace, this.kafkaCluster.getSelectorLabels());
                     }).compose(pods -> {
                         String lowestKafkaVersion = currentStsVersion;

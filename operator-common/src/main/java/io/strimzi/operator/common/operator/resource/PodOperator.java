@@ -73,6 +73,7 @@ public class PodOperator extends AbstractReadyResourceOperator<KubernetesClient,
         // Delete the pod
         LOGGER.debugCr(reconciliation, "Waiting for pod {} to be deleted", podName);
         Future<Void> podReconcileFuture =
+                // TODO 调和Pod状态：desired设置为null触发删除，删除后STS负责自动新建Pod达到重启效果
                 reconcile(reconciliation, namespace, podName, null).compose(ignore -> {
                     Future<Void> del = waitFor(reconciliation, namespace, podName, "deleted", pollingIntervalMs, timeoutMs, (ignore1, ignore2) -> {
                         // predicate - changed generation means pod has been updated

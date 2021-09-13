@@ -161,9 +161,11 @@ public abstract class AbstractOperator<
         Timer.Sample reconciliationTimerSample = Timer.start(metrics.meterRegistry());
 
         Future<Void> handler = withLock(reconciliation, LOCK_TIMEOUT_MS, () -> {
+            // TODO 获取资源信息
             T cr = resourceOperator.get(namespace, name);
 
             if (cr != null) {
+                // TODO cr不为null只是说明apiServer正常返回了，并不是说资源存在
                 if (!Util.matchesSelector(selector(), cr))  {
                     // When the labels matching the selector are removed from the custom resource, a DELETE event is
                     // triggered by the watch even through the custom resource might not match the watch labels anymore
@@ -182,6 +184,7 @@ public abstract class AbstractOperator<
                     status.setConditions(new ArrayList<>(conditions));
                     status.setObservedGeneration(cr.getStatus() != null ? cr.getStatus().getObservedGeneration() : 0);
 
+                    // TODO 更新资源
                     updateStatus(reconciliation, status).onComplete(statusResult -> {
                         if (statusResult.succeeded()) {
                             createOrUpdate.complete();
@@ -207,6 +210,7 @@ public abstract class AbstractOperator<
                     status.addCondition(errorCondition);
 
                     LOGGER.errorCr(reconciliation, "{} spec cannot be null", cr.getMetadata().getName());
+                    // TODO 更新资源
                     updateStatus(reconciliation, status).onComplete(notUsed -> {
                         createOrUpdate.fail(exception);
                     });
@@ -218,6 +222,7 @@ public abstract class AbstractOperator<
 
                 LOGGER.infoCr(reconciliation, "{} {} will be checked for creation or modification", kind, name);
 
+                // TODO 创建或者更新资源
                 createOrUpdate(reconciliation, cr)
                         .onComplete(res -> {
                             if (res.succeeded()) {
@@ -251,6 +256,7 @@ public abstract class AbstractOperator<
 
                 return createOrUpdate.future();
             } else {
+                // TODO cr为null，说明拉取资源是出现异常，
                 LOGGER.infoCr(reconciliation, "{} {} should be deleted", kind, name);
                 return delete(reconciliation).map(deleteResult -> {
                     if (deleteResult) {

@@ -101,6 +101,7 @@ public class ClusterOperator extends AbstractVerticle {
                 kafkaAssemblyOperator, kafkaMirrorMakerAssemblyOperator,
                 kafkaConnectAssemblyOperator, kafkaBridgeAssemblyOperator, kafkaMirrorMaker2AssemblyOperator));
         for (AbstractOperator<?, ?, ?, ?> operator : operators) {
+            // TODO 创建K8s资源Watcher
             watchFutures.add(operator.createWatch(namespace, operator.recreateWatch(namespace)).compose(w -> {
                 LOGGER.info("Opened watch for {} operator", operator.kind());
                 watchByKind.put(operator.kind(), w);
@@ -113,9 +114,12 @@ public class ClusterOperator extends AbstractVerticle {
 
         CompositeFuture.join(watchFutures)
                 .compose(f -> {
+                    // TODO 各个Watcher 监听到资源变动时进入这里, 扇入模式？
                     LOGGER.info("Setting up periodic reconciliation for namespace {}", namespace);
+                    // TODO vertx.setPeriodic(long delay, Handler<Long> handler): 周期性调用reconcileAll进行资源调和
                     this.reconcileTimer = vertx.setPeriodic(this.config.getReconciliationIntervalMs(), res2 -> {
                         LOGGER.info("Triggering periodic reconciliation for namespace {}", namespace);
+                        // TODO 资源状态调和
                         reconcileAll("timer");
                     });
                     return startHealthServer().map((Void) null);
@@ -143,6 +147,7 @@ public class ClusterOperator extends AbstractVerticle {
      */
     private void reconcileAll(String trigger) {
         Handler<AsyncResult<Void>> ignore = ignored -> { };
+        // TODO Kafka STS调和入口在这
         kafkaAssemblyOperator.reconcileAll(trigger, namespace, ignore);
         kafkaMirrorMakerAssemblyOperator.reconcileAll(trigger, namespace, ignore);
         kafkaConnectAssemblyOperator.reconcileAll(trigger, namespace, ignore);

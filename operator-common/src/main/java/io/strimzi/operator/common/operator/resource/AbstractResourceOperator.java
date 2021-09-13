@@ -107,9 +107,11 @@ public abstract class AbstractResourceOperator<C extends KubernetesClient,
                 T current = operation().inNamespace(namespace).withName(name).get();
                 if (desired != null) {
                     if (current == null) {
+                        // TODO 不存在则创建
                         LOGGER.debugCr(reconciliation, "{} {}/{} does not exist, creating it", resourceKind, namespace, name);
                         internalCreate(reconciliation, namespace, name, desired).onComplete(future);
                     } else {
+                        // TODO 存在则Patch
                         LOGGER.debugCr(reconciliation, "{} {}/{} already exists, patching it", resourceKind, namespace, name);
                         internalPatch(reconciliation, namespace, name, current, desired).onComplete(future);
                     }
@@ -117,6 +119,7 @@ public abstract class AbstractResourceOperator<C extends KubernetesClient,
                     if (current != null) {
                         // Deletion is desired
                         LOGGER.debugCr(reconciliation, "{} {}/{} exist, deleting it", resourceKind, namespace, name);
+                        // TODO 期望为空，但当前不为空，所以需要删除
                         internalDelete(reconciliation, namespace, name).onComplete(future);
                     } else {
                         LOGGER.debugCr(reconciliation, "{} {}/{} does not exist, noop", resourceKind, namespace, name);

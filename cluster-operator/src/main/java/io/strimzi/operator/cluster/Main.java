@@ -74,12 +74,14 @@ public class Main {
         
         KubernetesClient client = new DefaultKubernetesClient();
 
+        // TODO 创建ClusterRole
         maybeCreateClusterRoles(vertx, config, client).onComplete(crs -> {
             if (crs.succeeded())    {
                 PlatformFeaturesAvailability.create(vertx, client).onComplete(pfa -> {
                     if (pfa.succeeded()) {
                         LOGGER.info("Environment facts gathered: {}", pfa.result());
 
+                        // TODO operator启动入口
                         run(vertx, client, pfa.result(), config).onComplete(ar -> {
                             if (ar.failed()) {
                                 LOGGER.error("Unable to start operator for 1 or more namespace", ar.cause());
@@ -101,6 +103,7 @@ public class Main {
     static CompositeFuture run(Vertx vertx, KubernetesClient client, PlatformFeaturesAvailability pfa, ClusterOperatorConfig config) {
         Util.printEnvInfo();
 
+        // TODO 大多数K8s资源的watcher都在这个类里面创建
         ResourceOperatorSupplier resourceOperatorSupplier = new ResourceOperatorSupplier(vertx, client, pfa, config.featureGates(), config.getOperationTimeoutMs());
 
         OpenSslCertManager certManager = new OpenSslCertManager();
@@ -110,8 +113,10 @@ public class Main {
                 "abcdefghijklmnopqrstuvwxyz" +
                         "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
                         "0123456789");
+        // TODO 管理ZK 、Kafka STS等相关资源的Operator
         KafkaAssemblyOperator kafkaClusterOperations = new KafkaAssemblyOperator(vertx, pfa,
                 certManager, passwordGenerator, resourceOperatorSupplier, config);
+        // TODO 管理Kafka Connect Deployment及其相关SVC的Operator
         KafkaConnectAssemblyOperator kafkaConnectClusterOperations = new KafkaConnectAssemblyOperator(vertx, pfa,
                 resourceOperatorSupplier, config);
 
@@ -131,6 +136,7 @@ public class Main {
         for (String namespace : config.getNamespaces()) {
             Promise<String> prom = Promise.promise();
             futures.add(prom.future());
+            // TODO Kafka Cluster Operator是上述Operator组合而成的
             ClusterOperator operator = new ClusterOperator(namespace,
                     config,
                     client,
